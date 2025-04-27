@@ -21,7 +21,7 @@ Key human-centered principles applied:
 
 | File/Folder | Description |
 |:------------|:------------|
-| `app.py` | Main Streamlit application code. |
+| `ischool club agent.py` | Main Streamlit application code. |
 | `HWs/su_orgs/` | Folder containing HTML pages of Syracuse University organizations (used for building the VectorDB). |
 | `HW4_VectorDB/` | ChromaDB persistent database (created after running once). |
 | `README.md` | Documentation about the project (this file). |
