@@ -1,0 +1,314 @@
+## Energy Consumption Analysis
+
+```{r}
+# Using the following libraries
+library(tidyverse)
+library(arrow)
+library(dplyr)
+library(data.table)
+library(lubridate)
+library(caret)
+```
+# Data Exploration and Cleaning
+```{r eval=FALSE}
+static_house_info_url <- "https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/static_house_info.parquet"
+Meta_data_url <- "https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/data_dictionary.csv"
+
+# Reading static_house_data_set, and metadataset
+static_house_info_df <- read_parquet(static_house_info_url)
+Meta_data_df <- read_csv_arrow(Meta_data_url)
+
+
+#Obtaining Unique building ids and counties.
+bldg_id <- unique(static_house_info_df$bldg_id)
+
+counties <- unique(static_house_info_df$in.county)
+
+```
+
+```{r eval=FALSE}
+# Function to obtain energy related data using building id
+obtain_energy <- function(bldg_id) {
+  
+  url <- glue::glue("https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/2023-houseData/",bldg_id,".parquet")
+  
+  df <- arrow::read_parquet(url)
+    
+  #Choosing the data of energy consumption in month of July
+  df <-  df %>% filter(month(time) == 7) 
+  
+  # Checking the numeric variables for negative values and converting them to positive values
+  numerical_cols <- sapply(df, is.numeric)
+  df[, numerical_cols] <- lapply(df[, numerical_cols], function(x) ifelse(x < 0, abs(x), x))
+
+  # Obtaining total energy consumption for hour
+  df$total_energy_hour <- rowSums(df[,-which(names(df) == 'time')])
+  
+  df <- df[, c('time', 'total_energy')]
+  
+  df$time <- as.POSIXct(df$time, tz= 'EST', origin = '1970-01-01')
+  
+  # Aggregating by day, obtaining daily total energy consumption for month of july
+  daily_df <- df %>%
+              mutate(date = as.Date(time)) %>% 
+              mutate(bldg_id = bldg_id) %>% 
+              group_by(bldg_id, date) %>%
+              summarize(total_energy = sum(total_energy_hour, na.rm = TRUE), .groups = 'drop')
+  
+  return(daily_df)
+}
+
+# Calling obtain_energy function for all building ids
+total_energy_df <- purrr::map_dfr(bldg_id, obtain_energy)
+
+#write_csv(total_energy_df, "C:/Users/Ramya/IDS/Final Project/total_energy.csv")
+```
+
+```{r eval=FALSE}
+# Merging total energy dataset with static house info dataset on building id.
+merge_df <- merge(static_house_info_df, total_energy_df, by = "bldg_id")
+```
+
+```{r eval=FALSE}
+# Function to obtain weather related details for counties.
+obtain_weather_data <- function(county) {
+
+    url <- glue::glue(paste0("https://intro-datascience.s3.us-east-2.amazonaws.com/SC-data/weather/2023-weather-data/", county,".csv"))
+    df <- read.csv(url)
+    df$date_time <- as.Date(df$date_time, format = "%Y-%m-%d %H:%M:%S")
+    
+    # Obtaining median of weather details for every day of Month July
+    daily_data <- df %>%
+                  group_by(date_time = as.Date(date_time, tz='GMT')) %>%
+                  summarise_all(mean)  %>% 
+                  filter(month(date_time) == 7) %>%
+                  mutate (county_id = county) %>%
+                  group_by(county_id, date_time) %>%
+              summarise(Direct_Normal_Radiation = median(Direct.Normal.Radiation..W.m2., na.rm = TRUE),
+                Diffuse_Horizontal_Radiation = median(Diffuse.Horizontal.Radiation..W.m2., na.rm = TRUE),
+                Dry_Bulb_Temperature = median(Dry.Bulb.Temperature...C., na.rm = TRUE),
+                  Relative_Humidity = median(Relative.Humidity...., na.rm = TRUE),
+                  Wind_Speed = median(Wind.Speed..m.s., na.rm = TRUE),
+                Wind_Direction = median(Wind.Direction..Deg., na.rm = TRUE),
+                Global_Horizontal_Radiation = median(Global.Horizontal.Radiation..W.m2., na.rm = TRUE), .groups = 'drop') %>%
+                mutate(date = date_time) %>%
+                mutate(in.county = county_id)
+    
+    return(daily_data)
+}
+
+#Calling obtain_weather_data function for all counties 
+weather_df <- purrr::map_dfr(counties, obtain_weather_data)
+
+```
+
+```{r eval=FALSE}
+# Merging all the datasets based on county and date
+final_merged_df <- merge(merge_df, weather_df, by = c("in.county", "date"))
+
+#Storing the final merged data into final_merged_df.csv
+write.csv(final_merged_df, 'C:/Ramya/Syracuse/IDS/Final Project/pro/final_merged_df.csv')
+```
+
+```{r}
+# Reading data from final_merged_df.csv file
+final_merged_df <- read.csv('C:/Ramya/Syracuse/IDS/Final Project/pro/final_merged_df.csv')
+
+# Removing the index column after reading from .csv file
+final_merged_df <- final_merged_df %>% select(-X)
+
+# Looking for null values in all columns
+null_values <- colSums(is.na(final_merged_df))
+
+# Printing the result
+print(null_values)
+```
+
+
+```{r }
+# Function to check the frequency of values in column
+freq_table <- function(column){
+  freq_df <- data.frame(
+    col_name = column,
+    frequency = nrow(data.frame(table(final_merged_df[,column])))
+  )
+  return (freq_df)
+}
+
+freq_df <- purrr::map_dfr(colnames(final_merged_df), freq_table)
+
+# Obtaining columns whose frequency is greater than 1
+col_names <- freq_df[freq_df$frequency>1, ]$col_name
+
+# Obtaining final merged dataset whose columns have more than 1 different values
+cleaned_final_df <- final_merged_df[, col_names]
+
+```
+
+```{r}
+# Maintaining the data consistency and readability by removing the units from values and converting them into numerical type.
+
+# Removing F from in.cooling_setpoint column
+cleaned_final_df$in.cooling_setpoint <- as.numeric(sub("F", "", cleaned_final_df$in.cooling_setpoint))
+
+# Removing F from in.cooling_setpoint_offset_magnitude column
+cleaned_final_df$in.cooling_setpoint_offset_magnitude <- as.numeric(sub("F", "", cleaned_final_df$in.cooling_setpoint_offset_magnitude))
+
+# Removing F from in.heating_setpoint column
+cleaned_final_df$in.heating_setpoint <- as.numeric(sub("F", "", cleaned_final_df$in.heating_setpoint))
+
+# Removing F from in.heating_setpoint_offset_magnitude column
+cleaned_final_df$in.heating_setpoint_offset_magnitude <- as.numeric(sub("F", "", cleaned_final_df$in.heating_setpoint_offset_magnitude))
+
+# Removing Hour from in.bathroom_spot_vent_hour column
+cleaned_final_df$in.bathroom_spot_vent_hour <- as.numeric(sub("Hour", "", cleaned_final_df$in.bathroom_spot_vent_hour))
+
+# Removing Hour from in.range_spot_vent_hour column
+cleaned_final_df$in.range_spot_vent_hour <- as.numeric(sub("Hour", "", cleaned_final_df$in.range_spot_vent_hour))
+
+# Removing ACH50 from in.infiltration column
+cleaned_final_df$in.infiltration <- as.numeric(sub(" ACH50", "", cleaned_final_df$in.infiltration))
+
+# Removing None, Car from in.geometry_garage column
+cleaned_final_df$in.geometry_garage <- ifelse(cleaned_final_df$in.geometry_garage == "None", 0, as.numeric(gsub(" Car", "", cleaned_final_df$in.geometry_garage)))
+
+
+```
+
+```{r}
+
+# For the columns that have ranges, we are generally taking mean for them.
+obtain_mean <- function(values) {
+  if (grepl(">", values)) {
+    greater_than_value <- as.numeric(gsub(">", "", values))
+    return(greater_than_value + 1)
+  }
+  
+  if (grepl("<", values)) {
+    less_than_value <- as.numeric(gsub("<", "", values))
+    return(less_than_value - 1)
+  }
+
+  split <- strsplit(values, "-")[[1]]
+  
+  split <- as.numeric(gsub("\\+", "", split))  
+  
+  if (length(split) == 2) {
+    return(mean(split))
+  } else {
+    return(split[1])
+  }
+}
+
+cleaned_final_df$in.income <- sapply(cleaned_final_df$in.income, obtain_mean)
+
+cleaned_final_df$in.income_recs_2015 <- sapply(cleaned_final_df$in.income_recs_2015, obtain_mean)
+
+cleaned_final_df$in.income_recs_2020 <- sapply(cleaned_final_df$in.income_recs_2020, obtain_mean)
+
+```
+# MODEL BUILDING
+```{r}
+set.seed(123)
+
+# Splitting 80% of data into training set, and 20% into testing set.
+trainIndex <- createDataPartition(cleaned_final_df$total_energy , p = 0.8, list = FALSE)
+
+train_data <- cleaned_final_df[trainIndex, ]
+test_data <- cleaned_final_df[-trainIndex, ]
+
+```
+# 1. LINEAR REGRESSION
+```{r}
+
+#Building linear regression model to predict total energy
+lmout <- lm(total_energy ~ ., data = train_data)
+
+# Display summary
+summary(lmout)
+```
+
+
+```{r}
+# Predict total energy values for test data
+predicted_values <- predict(lmout, newdata = test_data)
+
+# These are the actual total energy values of test data
+actual_values <- test_data$total_energy
+
+# Obtain the R-Squared error.
+R_squared <- 1 - (sum((actual_values - predicted_values)^2) / sum((actual_values - mean(actual_values))^2))
+
+cat("R-squared (R²):", R_squared, "\n")
+cat("Accuracy of Linear regression model is : ", R_squared * 100, "\n")
+
+```
+# 2. XG BOOST
+```{r}
+# Build XG BOOST model to predict the total energy values.
+
+#install.packages('xgboost')
+library(xgboost)
+library(dplyr)
+
+# Building the model
+model_xgb <- xgboost(
+  data = as.matrix(train_data[, -which(names(train_data) == "total_energy")] %>% select_if(is.numeric)), 
+  label = train_data$total_energy,
+  objective = "reg:squarederror",  # Use squared error for regression
+  nrounds = 100  # Adjust the number of boosting rounds
+)
+
+# Make predictions on the test set
+predictions <- predict(model_xgb, as.matrix(test_data[, -which(names(test_data) == "total_energy")] %>% select_if(is.numeric)))
+
+# Obtain the R-Squared error.
+rsquared <- 1 - (sum((predictions - test_data$total_energy)^2) / sum((mean(test_data$total_energy) - test_data$total_energy)^2))
+cat("R-squared:", rsquared, "\n")
+
+cat("Accuracy of XG BOOST model is : ", rsquared * 100, "\n")
+
+```
+# 3. XG BOOST - Using Hyperparameters
+```{r}
+# Building model including hyperparameters like depth of tree and learning rate
+
+xgb_model_2 <- xgboost(data = as.matrix(train_data[, -which(names(train_data) == "total_energy")] %>% select_if(is.numeric)), label = train_data$total_energy, nrounds = 100, max_depth = 8, eta = 0.2, subsample = 0.7, colsample_bytree = 0.7)
+
+# These are the actual total energy values of test data
+actual_values <- test_data$total_energy
+
+# Make predictions using the LASSO model on the test data
+predictions <- predict(xgb_model_2, as.matrix(test_data[, -which(names(test_data) == "total_energy")] %>% select_if(is.numeric)))
+
+# Calculate R-squared
+rsquared <- 1 - (sum((actual_values - predictions)^2) / sum((actual_values - mean(actual_values))^2))
+
+
+cat("R-squared:", rsquared, "\n")
+cat("Accuracy of XG BOOST with hyperparameters model is : ", rsquared * 100, "\n")
+
+```
+
+
+```{r}
+
+# Increase the temperatures with 5 degrees
+new_final_df <- cleaned_final_df %>%
+                mutate(Dry_Bulb_Temperature = Dry_Bulb_Temperature + 5)
+
+
+# Predict the total energy using the best working model for the increased temperature
+predicted_energy <- predict(xgb_model_2, as.matrix(new_final_df[, -which(names(new_final_df) == "total_energy")] %>% select_if(is.numeric)))
+
+# Storing newly predicted total energy into new_total_energy column.
+new_final_df$new_total_energy <- predicted_energy
+
+write.csv(new_final_df , 'C:/Ramya/Syracuse/IDS/Final Project/predicted_df.csv')
+
+```
+
+
+
+
+

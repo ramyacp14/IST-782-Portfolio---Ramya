@@ -1,0 +1,12 @@
+name: EnergyConsumption
+title: EnergyConsumption
+username: rpatchal
+account: rpatchal
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 10767138
+bundleId: 8033162
+url: https://rpatchal.shinyapps.io/EnergyConsumption/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
