@@ -29,29 +29,29 @@ This project analyzes U.S. tobacco usage trends (2011-2019) and e-cigarette heal
 
 
 ## Key Sections:
-1. E-Cigarette Health Risks:
+### 1. E-Cigarette Health Risks:
 
       Seizure case analysis (12.68% of reports)
       
       Product defect impacts on respiratory health
 
-2. Demographic Trends:
+### 2. Demographic Trends:
 
       Smoking rates by race/gender (2011-2019)
       
       State-level cessation rates (CA highest at 75%)
 
-3. Policy Analysis:
+### 3. Policy Analysis:
 
       Tax vs. sales correlation (-0.64)
       
       Education impact (college grads smoke 6.5% vs 17% for HS grads)
 
-4. Forecasting:
+### 4. Forecasting:
 
       Prophet models for e-cigarette/cigarette demand
-
-### Visualization Tools: 
+      
+## Visualization Tools: 
       1. Interactive Plotly charts
       
       2. Seaborn/Matplotlib static visualizations
