@@ -26,39 +26,34 @@ This project analyzes U.S. tobacco usage trends (2011-2019) and e-cigarette heal
 2. **Running the Notebook**:
    ```bash
    jupyter notebook tobacco_analysis.ipynb
-Key Sections
-E-Cigarette Health Risks:
 
-Seizure case analysis (12.68% of reports)
 
-Product defect impacts on respiratory health
+## Key Sections:
+1. E-Cigarette Health Risks:
 
-Demographic Trends:
+      Seizure case analysis (12.68% of reports)
+      
+      Product defect impacts on respiratory health
 
-Smoking rates by race/gender (2011-2019)
+2. Demographic Trends:
 
-State-level cessation rates (CA highest at 75%)
+      Smoking rates by race/gender (2011-2019)
+      
+      State-level cessation rates (CA highest at 75%)
 
-Policy Analysis:
+3. Policy Analysis:
 
-Tax vs. sales correlation (-0.64)
+      Tax vs. sales correlation (-0.64)
+      
+      Education impact (college grads smoke 6.5% vs 17% for HS grads)
 
-Education impact (college grads smoke 6.5% vs 17% for HS grads)
+4. Forecasting:
 
-Forecasting:
+      Prophet models for e-cigarette/cigarette demand
 
-Prophet models for e-cigarette/cigarette demand
-
-Visualization Tools
-Interactive Plotly charts
-
-Seaborn/Matplotlib static visualizations
-
-Word clouds for health issues
-
-Authors:
-Ramya
-
-Mrudulahari
-
-Akhil Richard
+### Visualization Tools: 
+      1. Interactive Plotly charts
+      
+      2. Seaborn/Matplotlib static visualizations
+      
+      3. Word clouds for health issues
